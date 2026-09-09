@@ -54,6 +54,7 @@ trust. The generator is in `generator/estate.py` and the shape of the data is me
 | **`graph_from_servicenow.py`** | **Reads ServiceNow back through snowloader and builds the Neo4j graph. This is the one that matters.** |
 | `load_neo4j.py` | Builds the graph from the local files instead. Useful for a fast rebuild; not the article's premise. |
 | `repair_relationships.py` | Fixes the direction of `cmdb_rel_ci` rows that were written backwards. |
+| `inspect_rel_type.py` | Prints every column ServiceNow defines on `cmdb_rel_type`, read from a live instance. Part 6 rests a decision on there being no impact column there, and this is the evidence. It exits non-zero if a future release adds one. |
 | `verify_relationships.py` | Asks the instance what is actually there, rather than trusting the files. |
 | `env.py` | Finds `.env.local` wherever you put it, and says where it looked if it fails. |
 | `ask.py` | Ask a question in English and get an answer out of the graph. |
@@ -80,6 +81,7 @@ results is a question set that flatters them.
 | `degraded.py` | Removes dependency edges on purpose and re-asks, to measure what a stale CMDB costs. |
 | `scaling.py` | Repeats the comparison at 2,000 / 5,000 / 20,000 / 82,296 documents. |
 | `ablation.py` | Puts the graph's facts into the text and checks whether the graph still adds anything. |
+| `stemming.py` | Runs the keyword arm with and without a stemmer. The article claimed stemming changed nothing and had no code behind the claim. It does now, and the interesting half is that stemming fixes the vocabulary miss and still does not move the score. |
 
 ### `tests/` — 132 of them
 
