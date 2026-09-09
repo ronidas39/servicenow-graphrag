@@ -1,0 +1,10 @@
+# Everything this article needs, pinned to what it was tested on.
+# Python 3.10 or newer. Tested on 3.13.15.
+
+snowloader==0.8.1        # reading ServiceNow tables (Part 5)
+neo4j>=5.20,<6           # the official driver (Part 7)
+neo4j-graphrag>=1.0      # the five retrievers (Part 9)
+requests>=2.31           # plain HTTP, for the loaders (Part 4)
+numpy>=1.26              # the vector arm (Part 9)
+pandas>=2.0              # turning answers into tables (Part 5 section 50)
+pytest>=8.0              # running the tests

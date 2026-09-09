@@ -1,0 +1,51 @@
+{
+  "built_at": "2026-09-09T05:18:35.956648+00:00",
+  "seed": 20260908,
+  "note": "The instance, the tables, the field behaviour and the API this loads into are all real. The estate and the words inside the tickets are written by this generator. Real incident text is what makes ITSM data confidential, which is why no company publishes it, and why the article self hosts a model rather than sending the text to a vendor. Configuration items are named the way a real estate names them: a service carries a business name because people talk about it, a host carries an infrastructure name because nobody does. No token runs down a stack, so finding a service by name does not find its hosts. That is deliberate. An earlier version shared one token across every item in a stack and a plain substring search recovered the whole stack at 78 percent recall, which would have decided this article's comparison before any retriever ran.",
+  "files": {
+    "configuration_items": {
+      "rows": 11891,
+      "bytes": 3631500,
+      "sha256_16": "392106b44ad7c62c"
+    },
+    "relationships": {
+      "rows": 28694,
+      "bytes": 4574003,
+      "sha256_16": "0ac1930ae42bb07a"
+    },
+    "incidents": {
+      "rows": 60000,
+      "bytes": 49667609,
+      "sha256_16": "23aec87b7348914a"
+    },
+    "changes": {
+      "rows": 8000,
+      "bytes": 5525886,
+      "sha256_16": "8de53027b8e54eff"
+    },
+    "problems": {
+      "rows": 900,
+      "bytes": 604126,
+      "sha256_16": "c9130f584eba3234"
+    },
+    "knowledge": {
+      "rows": 301,
+      "bytes": 201593,
+      "sha256_16": "6023bfcf4690b292"
+    }
+  },
+  "totals": {
+    "nodes": 81092,
+    "dependency_edges": 28694,
+    "work_notes": 107690
+  },
+  "measured_rates": {
+    "incidents_repeating_an_earlier_ticket": 0.0751,
+    "incidents_naming_another_ticket": 0.2046,
+    "incidents_with_pasted_output": 0.3468,
+    "incidents_with_no_configuration_item": 0.1705,
+    "incidents_naming_a_one_hop_neighbour": 0.3719,
+    "changes_raised_after_their_incident": 0.0591,
+    "dependency_edges_over_a_year_old": 0.1789
+  }
+}

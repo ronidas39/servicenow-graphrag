@@ -1,0 +1,22 @@
+# Secrets. Never commit these.
+.env
+.env.local
+
+# Derived and large: the embedding cache is ~482MB and rebuilds from the corpus.
+dataset/.embeddings/
+dataset/.ci-sysids.json
+dataset/.load-progress.json
+
+# Run outputs.
+results/
+*.npy
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
