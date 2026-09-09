@@ -33,6 +33,7 @@ from snowloader import (
     IncidentLoader,
     KnowledgeBaseLoader,
     ProblemLoader,
+    RelationshipLoader,
     SnowConnection,
 )
 
@@ -125,32 +126,37 @@ def run(session, cypher: str, source: Iterator[dict], size: int, label: str,
 # ── reading each table through snowloader ──────────────────────────────────────────
 
 def read_cis(conn: SnowConnection, query: str, limit: int | None) -> tuple[list, list]:
-    """Configuration items and the dependency edges between them, in one pass.
+    """Configuration items, then every dependency edge, in two bulk reads.
 
-    include_relationships makes snowloader fetch cmdb_rel_ci for each item and hand back
-    the target, the relationship type by name, and which way it points. Doing that by
-    hand means a second query per item and getting the direction right, which is the one
-    modelling mistake that inverts every answer while still returning rows.
+    ⛔ THIS USED `CMDBLoader(include_relationships=True)` AND IT HUNG FOR 112 MINUTES.
+    That option fetches cmdb_rel_ci separately for EVERY configuration item, so on this
+    instance it is 19,195 requests rather than one read of a 40,709 row table. Running
+    them 16 at a time did not fix the shape, it just made 16 requests hang at once: the
+    process sat at 0% CPU with sixteen sockets in CLOSE_WAIT, having printed nothing,
+    while the instance answered a count in 1.8 seconds the whole time.
+
+    It is the same mistake Part 7 section 73 warns about, one round trip per row, made
+    against ServiceNow instead of against Neo4j. `RelationshipLoader` reads the whole
+    table page by page, which is roughly 204 requests at 200 rows a page.
+
+    ⛔ AND IT PRINTS PROGRESS. The old version could not tell you whether it was working
+    or stuck, and that is why nobody noticed for nearly two hours. A read with no output
+    is indistinguishable from a hang.
     """
-    # ⛔ ONE QUERY PER ITEM IS UNUSABLE AT THIS SIZE. include_relationships fetches
-    # cmdb_rel_ci separately for every configuration item, and done in sequence that is
-    # one round trip each: a 300 item read had produced no output after ten minutes, and
-    # the full estate would have taken hours. concurrent_load runs those fetches in
-    # parallel, and max_relationship_workers controls how hard the instance is pushed.
-    loader = CMDBLoader(conn, query=query, include_relationships=True,
-                        max_relationship_workers=16)
-    # ⚠ concurrent_load has no limit of its own, so --limit is applied after the read.
-    # To try this quickly, narrow with --query rather than with --limit, or the whole
-    # configuration item table is fetched before anything is thrown away.
-    docs = loader.concurrent_load(max_workers=16)
+    t0 = time.time()
+    loader = CMDBLoader(conn, query=query, include_relationships=False)
+    docs = loader.concurrent_load(max_workers=8)
     if limit:
         docs = docs[:limit]
-    items, edges = [], []
+    print(f"    configuration items      {len(docs):>8,}  in {time.time() - t0:.0f}s")
+
+    items, by_id = [], set()
     for d in docs:
         m = d.metadata
         sid = half(m.get("sys_id"))
         if not sid:
             continue
+        by_id.add(sid)
         items.append({
             "sys_id": sid,
             "name": half(m.get("name"), "display_value") or "",
@@ -162,21 +168,27 @@ def read_cis(conn: SnowConnection, query: str, limit: int | None) -> tuple[list,
             "discovery_source": half(m.get("discovery_source"), "display_value") or "",
             "last_discovered": stamp(m.get("last_discovered")),
         })
-        for rel in m.get("relationships") or []:
-            target = rel.get("target_sys_id")
-            if not target:
-                continue
-            # ⛔ DIRECTION. snowloader reports it from the item being read. An outbound
-            # edge means this item is the PARENT, and the type name is written
-            # "parent descriptor::child descriptor", so the child is what the parent
-            # needs. One canonical arrow is stored: from the thing depended upon toward
-            # the thing that depends on it, so impact always flows along the arrow.
-            if rel.get("direction") == "outbound":
-                parent, child = sid, target
-            else:
-                parent, child = target, sid
-            edges.append({"parent": parent, "child": child,
-                          "type_name": rel.get("type") or ""})
+
+    # ⛔ PARENT AND CHILD COME OFF THE ROW, so there is no direction to infer. The old
+    # code read each edge from one end and worked out which way it pointed from whether
+    # snowloader called it inbound or outbound, which is the single modelling mistake
+    # that inverts every answer while still returning rows. cmdb_rel_ci already has both
+    # columns, and the type is written "parent descriptor::child descriptor" to match.
+    t0, edges, seen = time.time(), [], 0
+    for d in RelationshipLoader(conn).lazy_load():
+        seen += 1
+        if seen % 2000 == 0:
+            print(f"    dependency edges         {seen:>8,}", end="\r", flush=True)
+        m = d.metadata
+        parent, child = half(m.get("parent_sys_id")), half(m.get("child_sys_id"))
+        # An edge to something outside the item set cannot be drawn, and keeping it would
+        # make the relationship count disagree with the graph that gets built.
+        if not parent or not child or parent not in by_id or child not in by_id:
+            continue
+        edges.append({"parent": parent, "child": child,
+                      "type_name": half(m.get("type")) or ""})
+    print(f"    dependency edges         {len(edges):>8,}  of {seen:,} rows, "
+          f"in {time.time() - t0:.0f}s")
     return items, edges
 
 
