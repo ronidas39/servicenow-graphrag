@@ -1,0 +1,83 @@
+{
+  "what": "recall against corpus size, one question held fixed, three seeds",
+  "source": "retrieval/scaling.py, 2026-09-10, embedding model Qwen3-Embedding-0.6B",
+  "note": "the published crossover came from nomic-embed-text and does not reproduce here",
+  "sizes": [
+    2000,
+    5000,
+    10000,
+    20000,
+    40000,
+    82296
+  ],
+  "questions": {
+    "Q04": {
+      "kind": "semantic",
+      "gold": 6,
+      "bm25": [
+        1.0,
+        0.33,
+        0.22,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vector": [
+        0.33,
+        0.22,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vector_nomic_published": [
+        0.83,
+        0.67,
+        0.39,
+        0.17,
+        null,
+        0.0
+      ]
+    },
+    "Q01": {
+      "kind": "lookup",
+      "gold": 1,
+      "bm25": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "vector": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "Q12": {
+      "kind": "multi_hop",
+      "gold": 4,
+      "bm25": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "vector": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  }
+}

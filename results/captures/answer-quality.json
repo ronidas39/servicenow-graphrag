@@ -1,0 +1,442 @@
+{
+  "usable": true,
+  "model": "chat",
+  "temperature": 0.0,
+  "answer_prompt": "You are answering a question about an IT service management estate.\nUse ONLY the records below. Do not use anything you know from elsewhere.\nIf the records do not contain the answer, reply exactly: CANNOT ANSWER FROM THESE RECORDS.\nAnswer in at most three sentences.\n\nRECORDS:\n{context}\n\nQUESTION: {question}\nANSWER:",
+  "judge_prompt": "You are grading one answer against a list of the records that a correct answer must be based on.\nReply with one word and nothing else.\nCORRECT   the answer is supported by the records and addresses the question\nWRONG     the answer states something the records do not support\nREFUSED   the answer declines to answer\n\nQUESTION: {question}\n\nRECORDS A CORRECT ANSWER RESTS ON:\n{gold}\n\nANSWER TO GRADE:\n{answer}\n\nVERDICT:",
+  "control": {
+    "cases": 6,
+    "on_gold": 3,
+    "on_random": 0
+  },
+  "self_consistency": {
+    "graded": 47,
+    "disagreed": 0
+  },
+  "agreement_with_gold": {
+    "comparable": 47,
+    "agreed": 38
+  },
+  "by_arm": {
+    "hybrid": {
+      "correct": 3,
+      "wrong": 2,
+      "refused": 3,
+      "graded": 8
+    },
+    "bm25": {
+      "correct": 2,
+      "wrong": 3,
+      "refused": 2,
+      "graded": 7
+    },
+    "vector": {
+      "correct": 1,
+      "wrong": 2,
+      "refused": 5,
+      "graded": 8
+    },
+    "vector_cypher": {
+      "correct": 1,
+      "wrong": 0,
+      "refused": 5,
+      "graded": 6
+    },
+    "no_retrieval": {
+      "correct": 0,
+      "wrong": 0,
+      "refused": 8,
+      "graded": 8
+    },
+    "graph_only": {
+      "correct": 0,
+      "wrong": 0,
+      "refused": 3,
+      "graded": 3
+    },
+    "text2cypher": {
+      "correct": 0,
+      "wrong": 0,
+      "refused": 7,
+      "graded": 7
+    }
+  },
+  "detail": [
+    {
+      "arm": "no_retrieval",
+      "question": "Q01",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "no_retrieval",
+      "question": "Q02",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "no_retrieval",
+      "question": "Q04",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "no_retrieval",
+      "question": "Q12",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "no_retrieval",
+      "question": "Q17",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "no_retrieval",
+      "question": "Q18",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "no_retrieval",
+      "question": "Q22",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "no_retrieval",
+      "question": "Q31",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "bm25",
+      "question": "Q01",
+      "recall": 0.0,
+      "verdict": "CORRECT",
+      "second_verdict": "CORRECT",
+      "answer": "The current state of INC2000042 is Resolved, and it was assigned to billing-support."
+    },
+    {
+      "arm": "bm25",
+      "question": "Q02",
+      "recall": 0.0,
+      "verdict": "WRONG",
+      "second_verdict": "WRONG",
+      "answer": "The last ticket closed on pg00071 is INC2046374, and its resolution notes state: \"Applied the fix and monitored for an hour. No recurrence.\""
+    },
+    {
+      "arm": "bm25",
+      "question": "Q04",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "bm25",
+      "question": "Q12",
+      "recall": 0.0,
+      "verdict": "WRONG",
+      "second_verdict": "WRONG",
+      "answer": "App1233 depends on pg0905, win0525, lnx2435, and lnx2436. If any of these dependencies stop working, app1233 will also stop working."
+    },
+    {
+      "arm": "bm25",
+      "question": "Q17",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "bm25",
+      "question": "Q18",
+      "recall": 0.0,
+      "verdict": "WRONG",
+      "second_verdict": "WRONG",
+      "answer": "The item that has caused the most incidents this year is lb-identity-prd-071, with 7 incidents since May 2025."
+    },
+    {
+      "arm": "bm25",
+      "question": "Q31",
+      "recall": 0.0,
+      "verdict": "CORRECT",
+      "second_verdict": "CORRECT",
+      "answer": "lnx0525 is a cmdb_ci_linux_server in the dev environment, located in the eu-west region, owned by the onboarding team. It depends on cluster-eu-west-02, and if it stops working, app0266 also stops working. Issues with lnx0525 have included connections refused during the evening peak, which were resolved by resizing the volume and rolling out the changes to the rest of the fleet. Additionally, ther"
+    },
+    {
+      "arm": "vector",
+      "question": "Q01",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "vector",
+      "question": "Q02",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "vector",
+      "question": "Q04",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "vector",
+      "question": "Q12",
+      "recall": 0.0,
+      "verdict": "WRONG",
+      "second_verdict": "WRONG",
+      "answer": "app1233 actually needs pg0905, win0525, lnx2435, and lnx2436 to work."
+    },
+    {
+      "arm": "vector",
+      "question": "Q17",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "vector",
+      "question": "Q18",
+      "recall": 0.0,
+      "verdict": "WRONG",
+      "second_verdict": "WRONG",
+      "answer": "The item that has caused the most incidents this year is svc-inventory-prd-724, with 7 incidents since April 2025."
+    },
+    {
+      "arm": "vector",
+      "question": "Q22",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "vector",
+      "question": "Q31",
+      "recall": 0.0,
+      "verdict": "CORRECT",
+      "second_verdict": "CORRECT",
+      "answer": "lnx0525 is a cmdb_ci_linux_server in the dev environment, eu-west region, owned by the onboarding team. lnx0525 depends on cluster-eu-west-02. If lnx0525 stops working, app0266 stops working too. Last confirmed by ServiceNow on 2026-08-05."
+    },
+    {
+      "arm": "hybrid",
+      "question": "Q01",
+      "recall": 0.0,
+      "verdict": "CORRECT",
+      "second_verdict": "CORRECT",
+      "answer": "The current state of INC2000042 is Resolved, and it was assigned to billing-support."
+    },
+    {
+      "arm": "hybrid",
+      "question": "Q02",
+      "recall": 0.0,
+      "verdict": "CORRECT",
+      "second_verdict": "CORRECT",
+      "answer": "The resolution notes for the last ticket closed on pg0071 are as follows: Resolution: Config corrected and rolled out to the rest of the fleet."
+    },
+    {
+      "arm": "hybrid",
+      "question": "Q04",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "hybrid",
+      "question": "Q12",
+      "recall": 0.0,
+      "verdict": "WRONG",
+      "second_verdict": "WRONG",
+      "answer": "App1233 needs pg0905, win0525, lnx2435, and lnx2436 to work. These dependencies ensure that app1233 functions correctly within the production environment in the EU-West region."
+    },
+    {
+      "arm": "hybrid",
+      "question": "Q17",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "hybrid",
+      "question": "Q18",
+      "recall": 0.0,
+      "verdict": "WRONG",
+      "second_verdict": "WRONG",
+      "answer": "The item that has caused the most incidents this year is svc-inventory-dev-1789, with 6 incidents since April 2025."
+    },
+    {
+      "arm": "hybrid",
+      "question": "Q22",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "hybrid",
+      "question": "Q31",
+      "recall": 0.0,
+      "verdict": "CORRECT",
+      "second_verdict": "CORRECT",
+      "answer": "lnx0525 is a cmdb_ci_linux_server in the dev environment, eu-west region, owned by the onboarding team. It depends on cluster-eu-west-02, and if it stops working, app0266 also stops working. Connections refused during the evening peak were noted, and this issue was previously resolved in INC2005813. Additionally, there was an incident where lnx0525 experienced API returning 502 intermittently, whi"
+    },
+    {
+      "arm": "graph_only",
+      "question": "Q02",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "graph_only",
+      "question": "Q12",
+      "recall": 1.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "graph_only",
+      "question": "Q31",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "vector_cypher",
+      "question": "Q01",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "vector_cypher",
+      "question": "Q02",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "vector_cypher",
+      "question": "Q04",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "vector_cypher",
+      "question": "Q12",
+      "recall": 0.75,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "vector_cypher",
+      "question": "Q22",
+      "recall": 0.4,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "vector_cypher",
+      "question": "Q31",
+      "recall": 0.25,
+      "verdict": "CORRECT",
+      "second_verdict": "CORRECT",
+      "answer": "lnx0525 is a cmdb_ci_linux_server in the dev environment."
+    },
+    {
+      "arm": "text2cypher",
+      "question": "Q01",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "text2cypher",
+      "question": "Q02",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "text2cypher",
+      "question": "Q04",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "text2cypher",
+      "question": "Q12",
+      "recall": 1.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "text2cypher",
+      "question": "Q17",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "text2cypher",
+      "question": "Q22",
+      "recall": 0.4,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    },
+    {
+      "arm": "text2cypher",
+      "question": "Q31",
+      "recall": 0.0,
+      "verdict": "REFUSED",
+      "second_verdict": "REFUSED",
+      "answer": "CANNOT ANSWER FROM THESE RECORDS."
+    }
+  ]
+}

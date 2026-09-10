@@ -22,6 +22,8 @@ Created: 2026-09-09
 
 from __future__ import annotations
 
+import datetime
+import json
 import pathlib
 import statistics
 import sys
@@ -159,6 +161,26 @@ def main() -> None:
           "\n     Removing those documents would be the clean test. It cannot be run: it"
           "\n     makes the gold unreachable for five measured questions, including both"
           "\n     multi hop ones, because their answers ARE configuration items.")
+
+    # ⛔ THE RESULT IS WRITTEN DOWN, NOT ONLY PRINTED. Section 113's table lived in prose
+    # while the run that produced it left nothing on disk, so nothing could check the table
+    # against the run and no figure could be built from it without re-typing four numbers.
+    out = HERE.parent / "results" / "ablation.json"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(json.dumps({
+        "run_at": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
+        "questions_compared": len(shared),
+        "questions_changed": len(moved),
+        "strategies": {
+            name: {"chunks": len(chunks),
+                   "mean_tokens": round(statistics.fmean([c.tokens for c in chunks]), 1),
+                   "total_tokens": sum(c.tokens for c in chunks)}
+            for name, chunks in strategies.items()},
+        "arms": {name: {"recall": agg["recall_mean"], "mrr": agg["mrr_mean"],
+                        "tokens": agg["tokens_mean"]}
+                 for name, (agg, _) in results.items()},
+    }, indent=1))
+    print(f"\n  wrote {out}")
 
     mrr_plain = results["per_record / vector"][0]["mrr_mean"]
     mrr_rich = results["graph_denormalised / vector"][0]["mrr_mean"]

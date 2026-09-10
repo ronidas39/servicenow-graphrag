@@ -21,13 +21,22 @@ Created: 2026-09-09
 from __future__ import annotations
 
 import argparse
+import collections
+import json
 import pathlib
+
+# ⛔ CHECKPOINTS LIVE BESIDE THE DATASET, so a read that dies costs the last page rather
+# than the last hour. The first version had none, and an hour of incident reading was
+# thrown away when one truncated page hit the default on_error="raise".
+CACHE = pathlib.Path(__file__).resolve().parent.parent / "dataset" / ".checkpoints"
+CACHE.mkdir(parents=True, exist_ok=True)
 import re
 import time
 from typing import Any, Iterator
 
 from neo4j import GraphDatabase
 from snowloader import (
+    FileCheckpoint,
     ChangeLoader,
     CMDBLoader,
     IncidentLoader,
@@ -36,6 +45,7 @@ from snowloader import (
     RelationshipLoader,
     SnowConnection,
 )
+from snowloader.fields import is_sys_id
 
 from load_neo4j import CLASS_LABELS, CONSTRAINTS, IMPACT_TYPES, INDEXES
 
@@ -70,7 +80,10 @@ def connect(env: dict[str, str]) -> SnowConnection:
         # full incident page in more than 60 seconds and snowloader gave up after three
         # retries. Smaller pages and a longer patience, with a pause between requests so
         # a shared instance is not hammered while a person is using it.
-        page_size=200,
+        # ⛔ 50, NOT 200. With display_value="all" every field arrives twice, and
+        # 200 rows put a page past 650KB, which is where this instance starts
+        # truncating its own JSON. Measured: failures at 669,895 and 858,873 bytes.
+        page_size=50,
         timeout=180,
         max_retries=5,
         retry_backoff=3.0,
@@ -83,10 +96,47 @@ def half(value: Any, want: str = "value") -> Any:
 
     want="value"          the stored half. Correct for timestamps and for references.
     want="display_value"  the shown half. Correct for a name a person reads.
+
+    ⛔ THIS IS ONLY SAFE WHEN THE FIELD STILL HAS TWO HALVES. Once a loader has curated a
+    field down to one string, `half` has nothing to choose between and hands back
+    whichever half that loader picked. See `joins_on` below, which is what a reference
+    field must go through instead.
     """
     if isinstance(value, dict):
         return value.get(want, value.get("value"))
     return value
+
+
+def joins_on(m: dict, field: str) -> str:
+    """The sys_id of a reference field, whatever shape the loader left it in.
+
+    ⛔ THIS FUNCTION EXISTS BECAUSE THE OBVIOUS CODE LOADED ZERO EDGES AND LOOKED FINE.
+    Both incidents and changes were read with the same line, `half(m.get("cmdb_ci"))`,
+    and changes produced 10,877 relationships while incidents produced none. Every count
+    in between was plausible: 66,127 incidents in, 55,803 with a linked item, 55,803 rows
+    processed by the write. Only the relationship count at the end was zero, and only
+    because section 75 asks for it.
+
+    The cause is in the loaders, not in the data. `ChangeLoader` curates `cmdb_ci` as the
+    stored half, and `IncidentLoader` curates the same key as the SHOWN half, so on
+    incidents that field holds `mer-dev-db-192`, a name, and matching a name against
+    sys_id finds nothing. One key, two meanings, two loaders, one package.
+
+    Resolving by name is not the fix, and measuring says so: all 12,844 distinct
+    references do resolve to a name in this estate, but 634 names sit on more than one
+    item and 426 of the references land on one of them. A display value is a label. It
+    was never a key, and `MacBook Pro 17"` is on 173 different items.
+
+    The sys_id was there the whole time. snowloader's `expand_reference_keys` puts the
+    second half of every field beside the first under a predictable name, and the
+    `_sys_id` suffix means precisely "you can join on this". So: take the companion key,
+    and accept the curated key only when it actually looks like a sys_id.
+    """
+    companion = half(m.get(f"{field}_sys_id")) or ""
+    if companion:
+        return str(companion)
+    direct = half(m.get(field)) or ""
+    return str(direct) if is_sys_id(direct) else ""
 
 
 def stamp(value: Any) -> str | None:
@@ -123,6 +173,66 @@ def run(session, cypher: str, source: Iterator[dict], size: int, label: str,
     return total
 
 
+
+# ⛔ EVERY READ GOES THROUGH HERE, AND THE FIRST VERSION USED NONE OF IT. `load()` is
+# sequential, intolerant and unresumable, and I called it for incidents, changes, problems
+# and knowledge while calling `concurrent_load` for the configuration items. Reading
+# 66,127 incidents that way took over an hour and then died on a truncated page.
+#
+# snowloader already has the four things that fix it:
+#
+#   concurrent_lazy_load   pages fetched in parallel, results streamed, so memory stays
+#                          flat and wall clock drops roughly with max_workers
+#   on_error="skip"        one malformed page does not kill the run. This instance
+#                          truncates its JSON somewhere past 700KB, and the default
+#                          "raise" turned that into a dead read after 18 retries
+#   checkpoint             a resumable cursor, so a failure costs the last page and not
+#                          the last hour
+#   keyset                 a sys_id cursor instead of a deep offset, which is exactly what
+#                          Part 5 section 48 tells the reader to do
+#
+# ⛔ AND IT PRINTS. A read with no output cannot be told apart from a hang, which is how
+# the first version cost 112 minutes before anybody looked.
+def stream(loader, label: str, limit: int | None, workers: int = 16, attempts: int = 6):
+    """Read one table in parallel, survive a bad page, and say how it is going.
+
+    ⛔ `on_error="skip"` IS NOT ENOUGH ON THIS INSTANCE, and finding that out cost a
+    second full run. The instance truncates its JSON somewhere past 650KB. snowloader
+    retries, and on the last attempt a partially parsed page yields a STRING where the
+    document builder expects a mapping:
+
+        File "snowloader/loaders/cmdb.py", line 102, in _record_to_document
+            sys_id = _raw_value(record.get("sys_id"))
+        AttributeError: 'str' object has no attribute 'get'
+
+    That happens after the page has been accepted, inside the conversion, so `on_error`
+    never sees it and the whole read dies. The checkpoint is what makes this survivable:
+    each attempt resumes where the last one stopped rather than starting again.
+    """
+    t0, out = time.time(), []
+    ckpt = FileCheckpoint(CACHE / f"{label}.checkpoint.json")
+    for attempt in range(1, attempts + 1):
+        try:
+            for doc in loader.concurrent_lazy_load(max_workers=workers, on_error="skip",
+                                                   checkpoint=ckpt):
+                out.append(doc)
+                if len(out) % 2000 == 0:
+                    print(f"    {label:24s} {len(out):>8,}", end="\r", flush=True)
+                if limit and len(out) >= limit:
+                    break
+            break
+        except (AttributeError, TypeError, ValueError) as exc:
+            # ⛔ NAMED EXCEPTIONS ONLY. A bare except here would swallow a genuine bug in
+            # the mapping code below and report a short read as a complete one.
+            if attempt == attempts:
+                print(f"\n    {label:24s} gave up after {attempts} attempts: {exc}")
+                break
+            print(f"\n    {label:24s} page failed ({type(exc).__name__}), resuming from "
+                  f"the checkpoint, attempt {attempt + 1} of {attempts}")
+    print(f"    {label:24s} {len(out):>8,}  in {time.time() - t0:.0f}s")
+    return out
+
+
 # ── reading each table through snowloader ──────────────────────────────────────────
 
 def read_cis(conn: SnowConnection, query: str, limit: int | None) -> tuple[list, list]:
@@ -144,11 +254,8 @@ def read_cis(conn: SnowConnection, query: str, limit: int | None) -> tuple[list,
     is indistinguishable from a hang.
     """
     t0 = time.time()
-    loader = CMDBLoader(conn, query=query, include_relationships=False)
-    docs = loader.concurrent_load(max_workers=8)
-    if limit:
-        docs = docs[:limit]
-    print(f"    configuration items      {len(docs):>8,}  in {time.time() - t0:.0f}s")
+    docs = stream(CMDBLoader(conn, query=query, include_relationships=False),
+                  "configuration items", limit)
 
     items, by_id = [], set()
     for d in docs:
@@ -160,7 +267,12 @@ def read_cis(conn: SnowConnection, query: str, limit: int | None) -> tuple[list,
         items.append({
             "sys_id": sid,
             "name": half(m.get("name"), "display_value") or "",
-            "sys_class_name": half(m.get("sys_class_name")) or "cmdb_ci",
+            # ⛔ THE COMPANION KEY AGAIN. CMDBLoader curates sys_class_name as the shown
+            # half, so this field held "Linux Server" while CLASS_LABELS is keyed on
+            # "cmdb_ci_linux_server". Nothing errored. Every item simply stayed a bare
+            # ConfigurationItem and the Server and Service counts came back zero.
+            "sys_class_name": (half(m.get("sys_class_name_value"))
+                               or half(m.get("sys_class_name")) or "cmdb_ci"),
             "serial_number": half(m.get("serial_number")) or "",
             "environment": half(m.get("environment"), "display_value") or "",
             "operational_status": half(m.get("operational_status")) or "",
@@ -194,7 +306,7 @@ def read_cis(conn: SnowConnection, query: str, limit: int | None) -> tuple[list,
 
 def read_incidents(conn: SnowConnection, query: str, limit: int | None) -> list[dict]:
     out = []
-    for d in IncidentLoader(conn, query=query).load(limit=limit):
+    for d in stream(IncidentLoader(conn, query=query), "incidents", limit):
         m = d.metadata
         out.append({
             "number": half(m.get("number")) or "",
@@ -206,8 +318,9 @@ def read_incidents(conn: SnowConnection, query: str, limit: int | None) -> list[
             "opened_at": stamp(m.get("opened_at")),
             "resolved_at": stamp(m.get("resolved_at")),
             "close_notes": half(m.get("close_notes"), "display_value") or "",
-            # A reference field: the sys_id is what joins, the display value is a name.
-            "ci_sys_id": half(m.get("cmdb_ci"), "value") or "",
+            # A reference field. `joins_on` and not `half`, and the docstring on
+            # `joins_on` explains what reading this one with `half` actually cost.
+            "ci_sys_id": joins_on(m, "cmdb_ci"),
             "text": d.page_content or "",
         })
     return out
@@ -215,7 +328,7 @@ def read_incidents(conn: SnowConnection, query: str, limit: int | None) -> list[
 
 def read_changes(conn: SnowConnection, query: str, limit: int | None) -> list[dict]:
     out = []
-    for d in ChangeLoader(conn, query=query).load(limit=limit):
+    for d in stream(ChangeLoader(conn, query=query), "changes", limit):
         m = d.metadata
         out.append({
             "number": half(m.get("number")) or "",
@@ -226,14 +339,14 @@ def read_changes(conn: SnowConnection, query: str, limit: int | None) -> list[di
             "planned_end": stamp(m.get("end_date")),
             "actual_start": stamp(m.get("work_start")),
             "actual_end": stamp(m.get("work_end")),
-            "ci_sys_id": half(m.get("cmdb_ci"), "value") or "",
+            "ci_sys_id": joins_on(m, "cmdb_ci"),
         })
     return out
 
 
 def read_problems(conn: SnowConnection, query: str, limit: int | None) -> list[dict]:
     out = []
-    for d in ProblemLoader(conn, query=query).load(limit=limit):
+    for d in stream(ProblemLoader(conn, query=query), "problems", limit):
         m = d.metadata
         out.append({
             "number": half(m.get("number")) or "",
@@ -241,14 +354,14 @@ def read_problems(conn: SnowConnection, query: str, limit: int | None) -> list[d
             "cause_notes": half(m.get("cause_notes"), "display_value") or "",
             "workaround": half(m.get("work_around"), "display_value") or "",
             "opened_at": stamp(m.get("opened_at")),
-            "ci_sys_id": half(m.get("cmdb_ci"), "value") or "",
+            "ci_sys_id": joins_on(m, "cmdb_ci"),
         })
     return out
 
 
 def read_knowledge(conn: SnowConnection, limit: int | None) -> list[dict]:
     out = []
-    for d in KnowledgeBaseLoader(conn).load(limit=limit):
+    for d in stream(KnowledgeBaseLoader(conn), "knowledge", limit):
         m = d.metadata
         out.append({
             "number": half(m.get("number")) or half(m.get("sys_id")) or "",
@@ -261,8 +374,28 @@ def read_knowledge(conn: SnowConnection, limit: int | None) -> list[dict]:
 
 # ── writing the graph ──────────────────────────────────────────────────────────────
 
+def cached(label: str, refresh: bool, produce):
+    """Read a table once and keep the flattened rows on disk.
+
+    Section 50 of the article says to do exactly this and it is not only advice for the
+    reader. A full read of this instance takes about eighty minutes, and the first time the
+    write step failed on a constraint, all of it had to happen again to retry a step that
+    takes four minutes. The cache holds the plain dictionaries the readers already produce,
+    not loader objects, so nothing has to be reconstructed to use it.
+    """
+    path = CACHE / f"{label}.rows.json"
+    if path.exists() and not refresh:
+        rows = json.loads(path.read_text())
+        print(f"    {label:24s} {len(rows):>8,}  from cache")
+        return rows
+    rows = produce()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(rows))
+    return rows
+
+
 def build(env: dict[str, str], query: str, limit: int | None, batch: int,
-          wipe: bool) -> None:
+          wipe: bool, refresh: bool = False) -> None:
     conn = connect(env)
     driver = GraphDatabase.driver(
         env["NEO4J_URI"], auth=(env["NEO4J_USERNAME"], env["NEO4J_PASSWORD"]))
@@ -270,16 +403,17 @@ def build(env: dict[str, str], query: str, limit: int | None, batch: int,
 
     print("  reading ServiceNow through snowloader")
     t0 = time.time()
-    items, edges = read_cis(conn, query, limit)
+    pair = cached("cis", refresh, lambda: list(read_cis(conn, query, limit)))
+    items, edges = pair[0], pair[1]
     print(f"    configuration items      {len(items):>8,}")
     print(f"    dependency edges         {len(edges):>8,}")
-    incidents = read_incidents(conn, "", limit)
+    incidents = cached("incidents", refresh, lambda: read_incidents(conn, "", limit))
     print(f"    incidents                {len(incidents):>8,}")
-    changes = read_changes(conn, "", limit)
+    changes = cached("changes", refresh, lambda: read_changes(conn, "", limit))
     print(f"    changes                  {len(changes):>8,}")
-    problems = read_problems(conn, "", limit)
+    problems = cached("problems", refresh, lambda: read_problems(conn, "", limit))
     print(f"    problems                 {len(problems):>8,}")
-    knowledge = read_knowledge(conn, limit)
+    knowledge = cached("knowledge", refresh, lambda: read_knowledge(conn, limit))
     print(f"    knowledge articles       {len(knowledge):>8,}")
     print(f"  read in {time.time() - t0:.0f}s\n")
 
@@ -289,6 +423,22 @@ def build(env: dict[str, str], query: str, limit: int | None, batch: int,
     if edges and not linked:
         print("  ⚠ every incident came back unlinked. Either the loader never set "
               "cmdb_ci, or this account cannot read the field.")
+
+    # A real CMDB is not the dataset this article generates. Most of the items already on a
+    # developer instance carry no serial number at all, and `key` is uniquely constrained,
+    # so the second blank one fails the whole write. Counting them here makes the shape of
+    # the instance visible before the load rather than as a constraint error 4,800 seconds
+    # into it.
+    serials = collections.Counter((i.get("serial_number") or "").strip() for i in items)
+    blank_key = serials.get("", 0)
+    if blank_key:
+        print(f"  configuration items with no serial number: {blank_key:,} of "
+              f"{len(items):,}  ({blank_key / max(1, len(items)):.0%})")
+    shared = {s: n for s, n in serials.items() if s and n > 1}
+    if shared:
+        worst, n_worst = max(shared.items(), key=lambda kv: kv[1])
+        print(f"  serial numbers shared by more than one item: {len(shared):,}, covering "
+              f"{sum(shared.values()):,} items. The worst is on {n_worst} of them.")
 
     with driver.session() as s:
         if wipe:
@@ -302,10 +452,19 @@ def build(env: dict[str, str], query: str, limit: int | None, batch: int,
         s.run("CALL db.awaitIndexes(300)")
 
         print("  writing the graph")
+        # ⛔ A SERIAL NUMBER IS NOT A KEY, AND THIS INSTANCE PROVES IT TWICE OVER. `key` is
+        # uniquely constrained. Writing the serial number into it failed first on the empty
+        # string, because most items on a developer instance have none, and then on a
+        # DUPLICATE: fifteen separate configuration items here share the serial L3BB911.
+        # The identifier that is actually unique is the one this MERGE already uses, so the
+        # key is the sys_id and the serial number keeps its own name.
         run(s, """
             UNWIND $rows AS row
             MERGE (c:ConfigurationItem {sys_id: row.sys_id})
-            SET c.name = row.name, c.key = row.serial_number,
+            SET c.name = row.name,
+                c.key = row.sys_id,
+                c.serial_number = CASE WHEN trim(coalesce(row.serial_number, '')) = ''
+                                  THEN NULL ELSE row.serial_number END,
                 c.sys_class_name = row.sys_class_name,
                 c.environment = row.environment,
                 c.operational_status = row.operational_status,
@@ -404,9 +563,13 @@ def main() -> None:
     ap.add_argument("--limit", type=int, help="stop after this many rows per table")
     ap.add_argument("--batch", type=int, default=1000)
     ap.add_argument("--wipe", action="store_true")
+    ap.add_argument("--refresh", action="store_true",
+                    help="re-read every table instead of using the cached rows")
     args = ap.parse_args()
-    build(read_env(), args.query, args.limit, args.batch, args.wipe)
+    build(read_env(), args.query, args.limit, args.batch, args.wipe,
+          args.refresh)
 
 
 if __name__ == "__main__":
     main()
+

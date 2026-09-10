@@ -298,7 +298,7 @@ def build_estate(
         rack = rng.choice([x for x in racks if x.region == srv.region])
         # "In Rack::Rack contains" and "Located in Zone::Zone contains" name the parent
         # first as well, so the server is the parent of both. The rack standing in for a
-        # zone is a simplification this estate makes on purpose, and Part 4 says so.
+        # zone is a simplification this estate makes on purpose, and Part 6 section 58 says so.
         est.rels.append(Rel(srv.key, rack.key, REL_RACK, stamp()))
         if rng.random() < 0.30:
             est.rels.append(Rel(srv.key, rack.key, REL_LOCATED, stamp()))

@@ -15,6 +15,7 @@ Created: 2026-09-09
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import sys
 import time
@@ -23,7 +24,9 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "questions"))
 
-from arms import BM25Only, CONTEXT_TOKEN_BUDGET, Hybrid, NoRetrieval, VectorOnly  # noqa: E402
+from arms import (BM25Only, CONTEXT_TOKEN_BUDGET, GraphOnly, Hybrid,  # noqa: E402
+                  HybridCypher, NoRetrieval, Text2Cypher, VectorCypher,
+                  VectorOnly)
 from chunking import (change_chunks, ci_chunks, knowledge_chunks,  # noqa: E402
                       per_record, problem_chunks)
 from evaluate import (ENUMERATION_CEILING, aggregate, report, save,  # noqa: E402
@@ -51,6 +54,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--no-vector", action="store_true",
                     help="skip the arms that need embeddings")
+    ap.add_argument("--no-graph", action="store_true",
+                    help="skip the arms that need Neo4j")
     args = ap.parse_args()
 
     world = World()
@@ -112,6 +117,66 @@ def main() -> None:
         meta["embedding_model"] = MODEL
         meta["embedding_dimensions"] = int(vectors.shape[1])
         print()
+
+    # ── the three arms that need the graph ────────────────────────────────────────
+    #
+    # ⛔ SECTION 110 REPORTED FOUR OF SEVEN FOR WEEKS AND THE REASON WAS NOT THE CODE.
+    # GraphOnly was written and never constructed here; VectorCypher and HybridCypher
+    # were named in arms.py's docstring and never written. Underneath all three was one
+    # fact: the graph in Neo4j held a different estate from the corpus, so a join from a
+    # chunk to its record matched nothing. The graph is built from the same files now.
+    #
+    # ⛔ THEY ARE SKIPPED, LOUDLY, IF THE GRAPH IS NOT THERE. A silent skip is how four
+    # of seven became normal. --no-graph is for running the index arms on a laptop with
+    # no database, and it says so in the output rather than in a comment.
+    if not args.no_graph:
+        try:
+            import re as _re
+            from neo4j import GraphDatabase
+            # ⛔ env.py LIVES IN generator/ AND THIS FILE'S PATH ONLY HAS retrieval/ AND
+            # questions/ ON IT. The first run of the graph arms died on "No module named
+            # 'env'" and reported it, which is the one good thing about the loud skip:
+            # four of seven with no reason printed is how this went unnoticed for weeks.
+            sys.path.insert(0, str(HERE.parent / "generator"))
+            from env import env_path
+            env = {}
+            for line in env_path().read_text().splitlines():
+                m = _re.match(r"^([A-Z0-9_]+)=(.*)$", line.strip())
+                if m:
+                    env[m.group(1)] = m.group(2).strip().strip('"').strip("'")
+            driver = GraphDatabase.driver(
+                env["NEO4J_URI"], auth=(env["NEO4J_USERNAME"], env["NEO4J_PASSWORD"]))
+            with driver.session() as probe:
+                got = probe.run("MATCH (c:Chunk) RETURN count(c) AS n").single()["n"]
+            if got != len(chunks):
+                raise RuntimeError(
+                    f"the graph holds {got:,} chunks and the corpus has {len(chunks):,}. "
+                    "Run generator/load_chunks.py; a partial join scores the graph arms "
+                    "against a corpus they cannot see.")
+            print(f"  graph: {got:,} chunks joined to their records")
+            names = {c["name"]: k for k, c in world.cis.items() if c.get("name")}
+            arms.append(GraphOnly(driver.session, names))
+            if not args.no_vector:
+                arms.append(VectorCypher(driver.session))
+                arms.append(HybridCypher(arms[3], driver.session))
+            meta["graph_chunks"] = got
+
+            # ⛔ THE EIGHTH ARM NEEDS A LANGUAGE MODEL AND SAYS SO WHEN IT HAS NONE.
+            # Part 8's GPU is destroyed at the end of Part 8 on purpose, so the normal
+            # state of this machine is "no model". Set CHAT_BASE_URL to a vLLM server.
+            chat = os.environ.get("CHAT_BASE_URL")
+            if chat:
+                arms.append(Text2Cypher(driver.session, chat))
+                meta["text2cypher_endpoint"] = "a vLLM server, see Part 8"
+                print(f"  model: writing queries against {chat.split('//')[-1]}")
+            else:
+                print("  ⛔ text2cypher did NOT run: no CHAT_BASE_URL. "
+                      "Launch Part 8's GPU and point it at the chat server.")
+                meta["text2cypher_skipped"] = "no CHAT_BASE_URL"
+            print()
+        except Exception as exc:                       # noqa: BLE001
+            print(f"  ⛔ the graph arms did NOT run: {exc}\n")
+            meta["graph_arms_skipped"] = str(exc)
 
     # ⛔ PRINT AS IT GOES. The vector arm embeds every question, and the hybrid embeds
     # them again, so a full run is minutes of silence with buffered output. A run you

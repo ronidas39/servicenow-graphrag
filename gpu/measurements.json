@@ -1,0 +1,53 @@
+{
+  "measured_at": "2026-09-10T03:59:18Z",
+  "instance_type": "g6.2xlarge",
+  "price_per_hour_usd": 0.9776,
+  "chat_model": "chat",
+  "embedding_model": "embed",
+  "generation": {
+    "single": {
+      "runs": 5,
+      "output_tokens": 256,
+      "prompt_tokens": 126,
+      "seconds_median": 4.974,
+      "tokens_per_second": 51.5
+    },
+    "concurrent_4": {
+      "requests": 4,
+      "wall_seconds": 5.11,
+      "total_output_tokens": 1024,
+      "tokens_per_second": 200.4,
+      "median_request_seconds": 5.109
+    },
+    "concurrent_16": {
+      "requests": 16,
+      "wall_seconds": 5.576,
+      "total_output_tokens": 4096,
+      "tokens_per_second": 734.6,
+      "median_request_seconds": 5.559
+    },
+    "concurrent_32": {
+      "requests": 32,
+      "wall_seconds": 6.553,
+      "total_output_tokens": 8192,
+      "tokens_per_second": 1250.1,
+      "median_request_seconds": 6.502
+    },
+    "cost": {
+      "price_per_hour_usd": 0.9776,
+      "single_stream_usd_per_million_output_tokens": 5.27,
+      "batched_usd_per_million_output_tokens": 0.22,
+      "batched_tokens_per_second": 1250.1
+    }
+  },
+  "embedding": {
+    "texts": 512,
+    "dimensions": 1024,
+    "batch_size": 32,
+    "wall_seconds": 2.86,
+    "texts_per_second": 179.0,
+    "characters": 260284,
+    "usd_per_million_texts": 1.52,
+    "source": "real corpus chunks"
+  }
+}

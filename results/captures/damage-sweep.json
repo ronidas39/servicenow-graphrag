@@ -1,0 +1,59 @@
+{
+  "what": "recall against how much of the dependency graph is missing",
+  "source": "retrieval/damage_sweep.py, 2026-09-10",
+  "questions": [
+    "Q08",
+    "Q09",
+    "Q12",
+    "Q18",
+    "Q20",
+    "Q22",
+    "Q29"
+  ],
+  "impact_edges": 17969,
+  "seeds": [
+    20260910,
+    20260911,
+    20260912
+  ],
+  "fractions": [
+    0.0,
+    0.1,
+    0.2,
+    0.4,
+    0.6
+  ],
+  "recall": {
+    "0.00": {
+      "bm25": 0.0,
+      "graph_only": 1.0,
+      "vector_cypher": 0.2875,
+      "hybrid_cypher": 0.05
+    },
+    "0.10": {
+      "bm25": 0.0,
+      "graph_only": 0.9166666666666666,
+      "vector_cypher": 0.32916666666666666,
+      "hybrid_cypher": 0.05000000000000001
+    },
+    "0.20": {
+      "bm25": 0.0,
+      "graph_only": 0.8333333333333334,
+      "vector_cypher": 0.3083333333333333,
+      "hybrid_cypher": 0.06666666666666667
+    },
+    "0.40": {
+      "bm25": 0.0,
+      "graph_only": 0.4166666666666667,
+      "vector_cypher": 0.1875,
+      "hybrid_cypher": 0.05000000000000001
+    },
+    "0.60": {
+      "bm25": 0.0,
+      "graph_only": 0.3333333333333333,
+      "vector_cypher": 0.11666666666666665,
+      "hybrid_cypher": 0.05416666666666667
+    }
+  },
+  "crossing_point": null
+}

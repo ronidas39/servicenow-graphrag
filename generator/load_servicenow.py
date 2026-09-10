@@ -437,9 +437,21 @@ def load_cis(t: Target, rows: list[dict], start_at: int, batch: int, state: dict
         # inside values gives "invalid data source [null]" and rejects the whole batch.
         payload = {"items": [{
             "className": r["sys_class_name"],
+            # ⛔ THE SYNTHETIC KEY DOES NOT GO IN serial_number, AND IT USED TO.
+            # serial_number is an identification attribute on the out of box CMDB
+            # identification rules for hardware classes, so the engine may identify,
+            # merge or split real configuration items on whatever is in it. Writing
+            # `host-payments-prd-042` there invites the IRE to reconcile a generated
+            # row against a real one that happens to share it, and a service does not
+            # have a serial number at all. Nothing here read the field back either:
+            # every later lookup in this file matches on `name`. So it is gone.
+            #
+            # If you need to carry an external key into a real CMDB, `sys_object_source`
+            # is the field pair ServiceNow provides for it, keyed by the data source
+            # named in the query parameter below. `correlation_id` is a task field and
+            # does not exist on cmdb_ci.
             "values": {
                 "name": r["name"],
-                "serial_number": r["key"],
                 "operational_status": str(r["operational_status"]),
                 "install_status": str(r["install_status"]),
             },

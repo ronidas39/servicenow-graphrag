@@ -7,8 +7,9 @@ dataset/.embeddings/
 dataset/.ci-sysids.json
 dataset/.load-progress.json
 
-# Run outputs.
-results/
+# Big derived artefacts only. results/*.json is committed on purpose: the article
+# quotes those numbers and says they can be checked rather than believed, which is
+# only true if they are here.
 *.npy
 
 # Python

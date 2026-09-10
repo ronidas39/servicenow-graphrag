@@ -18,6 +18,7 @@ Created: 2026-09-09
 
 from __future__ import annotations
 
+import json
 import pathlib
 import statistics
 import sys
@@ -29,7 +30,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "questions"))
 
 from arms import BM25Only, CONTEXT_TOKEN_BUDGET, fit_to_budget  # noqa: E402
-from embed import build as build_vectors, embed_texts  # noqa: E402
+from embed import MODEL, build as build_vectors, embed_texts  # noqa: E402
 from gold import World, build as build_gold  # noqa: E402
 from questions import QUESTIONS  # noqa: E402
 from run import build_corpus  # noqa: E402
@@ -43,6 +44,11 @@ LOOK_AT = ["Q04", "Q01", "Q12"]
 
 
 def main() -> None:
+    # ⛔ THIS WRITES ITS NUMBERS TO A FILE AS WELL AS TO THE TERMINAL. Section 112's
+    # figure used to be drawn from numbers copied out of a terminal by hand, and when
+    # the embedding model changed the terminal moved and the figure did not. Anything a
+    # figure reads has to be written by the thing that measured it.
+    captured: dict[str, dict] = {}
     world = World()
     gold = build_gold(world)
     chunks = build_corpus(world)
@@ -61,6 +67,8 @@ def main() -> None:
               f", {len(want)} correct records")
         print(f"    {question.text[:72]}")
         print(f"\n    {'corpus':>8s}  {'bm25 recall':>22s}  {'vector recall':>22s}")
+        captured[qid] = {"kind": question.kind, "gold": len(want),
+                         "bm25": [], "vector": []}
 
         for size in SIZES:
             bm_runs, vec_runs = [], []
@@ -94,9 +102,31 @@ def main() -> None:
                 return f"{statistics.fmean(runs):.2f} ± {statistics.pstdev(runs):.2f}"
 
             print(f"    {size:>8,}  {show(bm_runs):>22s}  {show(vec_runs):>22s}")
+            captured[qid]["bm25"].append(round(statistics.fmean(bm_runs), 4))
+            captured[qid]["vector"].append(round(statistics.fmean(vec_runs), 4))
 
     print("\n  Every subset contains all the correct records. The only thing that grows")
     print("  is the number of other documents they have to be ranked against.")
+
+    out = HERE.parent / "results" / "captures" / "scaling.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    existing = json.loads(out.read_text()) if out.exists() else {}
+    payload = {
+        "what": "recall against corpus size, one question held fixed, three seeds",
+        "source": f"retrieval/scaling.py, embedding model {MODEL}",
+        "note": ("the crossover published before this rerun came from nomic-embed-text "
+                 "and does not reproduce under the model this article ships"),
+        "sizes": SIZES,
+        "questions": {
+            qid: {**vals,
+                  "vector_nomic_published":
+                      existing.get("questions", {}).get(qid, {})
+                      .get("vector_nomic_published")}
+            for qid, vals in captured.items()
+        },
+    }
+    out.write_text(json.dumps(payload, indent=2) + "\n")
+    print(f"\n  wrote {out}")
 
 
 if __name__ == "__main__":

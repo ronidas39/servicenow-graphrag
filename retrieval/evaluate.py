@@ -153,7 +153,17 @@ def aggregate(scores: list[Score]) -> dict:
                              if len(recalls) > 1 else 0.0),
             "mrr_mean": (statistics.fmean([r.mrr for r in measured])
                          if measured else None),
+            # ⛔ TWO TOKEN MEANS, BECAUSE ONE OF THEM IS A TRAP. An arm that declines a
+            # question spends 0 tokens on it, and dividing by every question turns
+            # "answered 3 of 39" into "costs 59 tokens". The bare traversal looked eight
+            # times cheaper than every other arm on exactly that arithmetic, and the
+            # article called it the cheap one. tokens_when_answered is what it costs to
+            # answer; tokens_mean is what it costs to be asked.
             "tokens_mean": statistics.fmean([r.tokens for r in rows]) if rows else 0,
+            "tokens_when_answered": (
+                statistics.fmean([r.tokens for r in rows if not r.failed_to_run])
+                if any(not r.failed_to_run for r in rows) else None),
+            "answered": sum(1 for r in rows if not r.failed_to_run),
             "latency_p50": (statistics.median([r.latency_ms for r in rows])
                             if rows else 0),
             "latency_p95": (sorted(r.latency_ms for r in rows)[int(len(rows) * 0.95)]
@@ -183,6 +193,20 @@ def aggregate(scores: list[Score]) -> dict:
         held = [r.recall_at_k for r in rows if r.holdout and r.recall_at_k is not None]
         if held:
             out[arm]["holdout_recall"] = statistics.fmean(held)
+
+        # ⛔ THE HELD OUT CHECK IS RUNNABLE ON PRECISION, AND THE ARTICLE SAID IT WAS NOT.
+        # Section 117b reported "no held-out question has a gold set small enough to score
+        # recall on", which is true and was treated as the end of it. Three of the ten
+        # held-out questions are enumeration questions, and this file already scores those
+        # on precision against a random baseline for the questions nobody held back. The
+        # metric was there the whole time; nobody pointed it at the holdout.
+        hp = [r.precision_at_k for r in rows
+              if r.holdout and r.enumeration and r.precision_at_k is not None]
+        hc = [r.chance_precision for r in rows
+              if r.holdout and r.enumeration and r.chance_precision is not None]
+        out[arm]["holdout_enumeration_count"] = len(hp)
+        out[arm]["holdout_precision"] = statistics.fmean(hp) if hp else None
+        out[arm]["holdout_chance"] = statistics.fmean(hc) if hc else None
     return out
 
 
@@ -235,20 +259,27 @@ def is_a_real_difference(a: dict, b: dict) -> bool:
 
 
 def report(agg: dict) -> str:
+    # ⛔ EVERY MEAN CARRIES THE COUNT IT WAS TAKEN OVER. An arm that grades on 3 questions
+    # and an arm that grades on 10 printed their recall in the same column with nothing
+    # separating them, so 0.33 from three questions sat above 0.03 from ten and read as a
+    # ranking. The "on" column is the denominator, and the two token columns are the cost
+    # of answering against the cost of being asked.
     lines = [
-        f"{'arm':16s} {'recall':>8s} {'±':>7s} {'MRR':>7s} {'tokens':>8s} "
-        f"{'p50 ms':>8s} {'p95 ms':>8s} {'failed':>7s}",
-        "-" * 74,
+        f"{'arm':16s} {'recall':>8s} {'on':>4s} {'±':>7s} {'MRR':>7s} "
+        f"{'tok/ans':>8s} {'tok/ask':>8s} {'p50 ms':>8s} {'declined':>9s}",
+        "-" * 82,
     ]
     for arm, a in sorted(agg.items(),
                          key=lambda kv: -(kv[1]["recall_mean"] or -1)):
         rc = f"{a['recall_mean']:.2f}" if a["recall_mean"] is not None else "n/a"
         sd = f"{a['recall_stdev']:.2f}" if a["recall_mean"] is not None else ""
         mr = f"{a['mrr_mean']:.2f}" if a["mrr_mean"] is not None else "n/a"
+        ta = (f"{a['tokens_when_answered']:.0f}"
+              if a.get("tokens_when_answered") is not None else "n/a")
         lines.append(
-            f"{arm:16s} {rc:>8s} {sd:>7s} {mr:>7s} {a['tokens_mean']:>8.0f} "
-            f"{a['latency_p50']:>8.0f} {a['latency_p95']:>8.0f} "
-            f"{a['failed_to_run']:>7d}")
+            f"{arm:16s} {rc:>8s} {a['measured']:>4d} {sd:>7s} {mr:>7s} "
+            f"{ta:>8s} {a['tokens_mean']:>8.0f} "
+            f"{a['latency_p50']:>8.0f} {a['failed_to_run']:>9d}")
 
     # ⛔ EVERY PAIR, NOT JUST THE TOP TWO. This used to test only the two arms with the
     # highest means. Here those two are identical, so it printed "no difference" about the
@@ -308,10 +339,27 @@ def report(agg: dict) -> str:
     # report" rather than "this was not measured". Worse, before Q20's gold was fixed it
     # printed 0.00 for every arm from ONE broken gold set, and that looked like a finding
     # about generalisation.
+    # ── the held out check, on the metric that can carry it ──────────────────────
+    if any(a.get("holdout_precision") is not None for a in agg.values()):
+        lines.append("")
+        lines.append("held out questions, scored on precision because their gold sets are "
+                     "too large for recall:")
+        n_held = max(a.get("holdout_enumeration_count", 0) for a in agg.values())
+        lines.append(f"  {n_held} of them, none of which any retriever was tuned against")
+        for arm, a in sorted(agg.items(),
+                             key=lambda kv: -(kv[1].get("holdout_precision") or -1)):
+            if a.get("holdout_precision") is None:
+                continue
+            seen = a.get("enumeration_precision")
+            drift = (f"  against {seen:.2f} on the questions it was tuned with"
+                     if seen is not None else "")
+            lines.append(f"  {arm:16s} precision {a['holdout_precision']:.2f}"
+                         f"  chance {a['holdout_chance']:.2f}{drift}")
+
     if all(a["holdout_recall"] is None for a in agg.values()):
-        lines.append("  ⛔ NOT MEASURED. No held out question has a gold set small enough")
-        lines.append("     to score recall on, so this check did not run. The article must")
-        lines.append("     not claim the result generalised, because nothing tested it.")
+        lines.append("  ⛔ NOT MEASURED ON RECALL. No held out question has a gold set")
+        lines.append("     small enough to score recall on, so the recall column has no")
+        lines.append("     held out row. The precision check above is the one that runs.")
     for arm, a in sorted(agg.items()):
         if a["holdout_recall"] is not None:
             drop = ""

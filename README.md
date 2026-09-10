@@ -22,6 +22,8 @@ dataset/     the records you load INTO ServiceNow
 generator/   the loaders, for ServiceNow and for Neo4j
 questions/   the frozen question set and the gold answers
 retrieval/   chunking, the retrieval arms, the scoring
+gpu/         renting a GPU and serving both models on it
+results/     the numbers the article quotes, so they can be checked
 tests/       the tests that prove the above
 ```
 
@@ -52,7 +54,8 @@ trust. The generator is in `generator/estate.py` and the shape of the data is me
 | `build.py` | Runs the three above and writes `dataset/`. |
 | `load_servicenow.py` | Pushes `dataset/` into your ServiceNow instance. Idempotent. |
 | **`graph_from_servicenow.py`** | **Reads ServiceNow back through snowloader and builds the Neo4j graph. This is the one that matters.** |
-| `load_neo4j.py` | Builds the graph from the local files instead. Useful for a fast rebuild; not the article's premise. |
+| `load_neo4j.py` | Builds the graph from the local files instead. Faster, and the route to take if you would rather not stand up a ServiceNow instance at all. Article section 66b says when that is the right call. |
+| `load_chunks.py` | Cuts every record into chunks, embeds them, and writes 82,296 `:Chunk` nodes with a vector index. Run it after the graph exists, or every retriever queries an empty index without complaining. |
 | `repair_relationships.py` | Fixes the direction of `cmdb_rel_ci` rows that were written backwards. |
 | `inspect_rel_type.py` | Prints every column ServiceNow defines on `cmdb_rel_type`, read from a live instance. Part 6 rests a decision on there being no impact column there, and this is the evidence. It exits non-zero if a future release adds one. |
 | `verify_relationships.py` | Asks the instance what is actually there, rather than trusting the files. |
@@ -74,13 +77,15 @@ results is a question set that flatters them.
 | File | What it does |
 |---|---|
 | `chunking.py` | Turns records into the documents every arm searches. |
-| `embed.py` | Embeds them locally, cached on a fingerprint of the text. |
-| `arms.py` | The five retrieval strategies, plus two controls that let the comparison fail. |
+| `embed.py` | Embeds them through an OpenAI-compatible endpoint, cached on a fingerprint of the text. Point `EMBED_BASE_URL` at the vLLM server from `gpu/`. |
+| `arms.py` | The eight arms: six retrieval strategies, plus two controls that let the comparison fail. |
 | `evaluate.py` | recall, MRR, precision, an exact sign test, and a refusal to name a winner the data cannot support. |
 | `run.py` | Runs every arm against every question and writes `results/scores.json`. |
 | `degraded.py` | Removes dependency edges on purpose and re-asks, to measure what a stale CMDB costs. |
 | `scaling.py` | Repeats the comparison at 2,000 / 5,000 / 20,000 / 82,296 documents. |
 | `ablation.py` | Puts the graph's facts into the text and checks whether the graph still adds anything. |
+| `judge.py` | Grades the answers, not just the retrieval, and checks the judge three ways before printing a grade. Article section 108b. |
+| `damage_sweep.py` | Deletes a share of the dependency edges, re-runs the graph arms, puts the edges back and verifies the count returned. Article section 114b. |
 | `stemming.py` | Runs the keyword arm with and without a stemmer. The article claimed stemming changed nothing and had no code behind the claim. It does now, and the interesting half is that stemming fixes the vocabulary miss and still does not move the score. |
 
 ### `tests/` — 132 of them
@@ -130,9 +135,37 @@ python3 generator/load_servicenow.py
 # 2. read them back out and build the graph  <- the one that matters
 python3 generator/graph_from_servicenow.py --wipe
 
-# 3. measure
+# 3. chunk, embed and index. Needs an embedding server, see gpu/ below
+python3 generator/load_chunks.py
+
+# 4. measure
 python3 retrieval/run.py
 ```
+
+### The GPU, for steps 3 and 4
+
+Two of the eight arms need a model of your own: the embedding server for anything
+similarity-based, and a chat server for the arm that writes its own Cypher. Both run on
+one rented card. `gpu/` is the runbook, in the order you run it:
+
+```bash
+bash gpu/01-launch.sh     # rent it, with a spending ceiling and a self destruct
+bash gpu/02-setup.sh      # driver, CUDA, a venv, vLLM. Runs ON the server
+bash gpu/03-serve.sh      # both models on one card, ports 8000 and 8001
+python3 gpu/04-measure.py --price-per-hour 0.9776
+bash gpu/05-teardown.sh   # and it proves zero remaining rather than claiming it
+```
+
+Then point the code at it:
+
+```bash
+export EMBED_BASE_URL=http://<the address 01-launch.sh printed>:8001/v1
+export CHAT_BASE_URL=http://<the same address>:8000/v1
+```
+
+**Embed before you tear the GPU down.** `load_chunks.py` caches the vectors under a
+fingerprint of the corpus, so it is a one-off, but the cache is 482MB and is not in this
+repo. Without it, and without a server, step 3 has nothing to embed against.
 
 Step 2 is the article's premise. `load_neo4j.py` will build the same graph from the local
 files in a fraction of the time, and it is there for when you are iterating on the

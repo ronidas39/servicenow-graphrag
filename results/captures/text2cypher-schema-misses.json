@@ -1,0 +1,41 @@
+{
+  "what": "schema elements the text2cypher arm named that the graph does not have",
+  "source": "Neo4j client notifications during retrieval/run.py, 2026-09-10",
+  "labels": [
+    "SUPPORTS",
+    "Statement",
+    "Step",
+    "Team"
+  ],
+  "relationship_types": [
+    "DEPENDS_ON",
+    "REPEATED",
+    "RESOLVES_TO",
+    "SAID"
+  ],
+  "properties": [
+    "carryes_impact",
+    "content",
+    "decommissioned",
+    "duration",
+    "end_of_working_hours_time",
+    "expected_duration",
+    "in_production",
+    "labels",
+    "order",
+    "raised_by",
+    "raised_date",
+    "reportedDate",
+    "start_of_working_hours_time"
+  ],
+  "queries": [
+    "MATCH (c:ConfigurationItem {name:'cluster-us-east-01'})-[:SUPPORTS*1..2]-(bs:ConfigurationItem {labels:'BusinessService'})\\nRETURN bs.key AS key LIMIT 60",
+    "MATCH (c:ConfigurationItem {name:'database'})-[:SUPPORTS*1..2]-(t:Team)\\nRETURN DISTINCT t.name AS team_name LIMIT 60",
+    "MATCH (i:Incident)-[:RAISED_BY]->(p:Person {name: 'Complaints'})<-[:SAID]-(s:KnowledgeArticle)\\n   RETURN s.content AS complaint\\n   ORDER BY SIZE(s.content) DESC\\n   LIMIT 10",
+    "MATCH (i:Incident)-[:RAISED_BY]->(r:Person),\\n      (w:ConfigurationItem {name:'working_hours_flag'})\\nWHERE i.raised_date < w.end_of_working_hours_time AND i.raised_date >= w.start_of_working_hours_time - duration('P1M')\\nRETURN i.number AS incident_number\\nLIMIT 60",
+    "MATCH (i:Incident)-[:RAISED_BY|ASSIGNED_TO]-(p:Person), \\n      (p)-[:SAID|REPEATED*1..3]-(s:Statement)\\nWHERE s.text CONTAINS 'deploy' OR s.text CONTAINS 'config change'\\nRETURN DISTINCT i.number AS incidentNumber, s.text AS statementText\\nLIMIT 60",
+    "MATCH (k:KnowledgeArticle {number: 'KBA12345'})-[:DOCUMENTS]->(s:Step)\\nWHERE s.order = 1\\nRETURN s.description AS firstStep",
+    "MATCH (t:Incident {number: 'pg0071'})-[:AFFECTS]->(ci:ConfigurationItem)\\nOPTIONAL MATCH (t)-[:RESOLVES_TO]->(r:KnowledgeArticle)\\nRETURN r.number AS resolutionNotes LIMIT 1"
+  ],
+  "total_invented": 21
+}

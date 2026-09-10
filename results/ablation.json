@@ -1,0 +1,39 @@
+{
+ "run_at": "2026-09-10T08:41:19+00:00",
+ "questions_compared": 10,
+ "questions_changed": 0,
+ "strategies": {
+  "per_record": {
+   "chunks": 60000,
+   "mean_tokens": 131.0,
+   "total_tokens": 7861327
+  },
+  "graph_denormalised": {
+   "chunks": 60000,
+   "mean_tokens": 185.2,
+   "total_tokens": 11113961
+  }
+ },
+ "arms": {
+  "per_record / bm25": {
+   "recall": 0.4,
+   "mrr": 0.24500000000000002,
+   "tokens": 2512.5128205128203
+  },
+  "per_record / vector": {
+   "recall": 0.025,
+   "mrr": 0.1,
+   "tokens": 2908.4871794871797
+  },
+  "graph_denormalised / bm25": {
+   "recall": 0.4,
+   "mrr": 0.17916666666666667,
+   "tokens": 2495.3846153846152
+  },
+  "graph_denormalised / vector": {
+   "recall": 0.025,
+   "mrr": 0.1,
+   "tokens": 2924.5641025641025
+  }
+ }
+}
