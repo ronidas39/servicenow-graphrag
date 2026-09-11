@@ -167,9 +167,16 @@ export CHAT_BASE_URL=http://<the same address>:8000/v1
 fingerprint of the corpus, so it is a one-off, but the cache is 482MB and is not in this
 repo. Without it, and without a server, step 3 has nothing to embed against.
 
-Step 2 is the article's premise. `load_neo4j.py` will build the same graph from the local
-files in a fraction of the time, and it is there for when you are iterating on the
-modelling. It is not the thing being taught.
+Step 2 is the article's premise, and section 74c is the section about it: reading
+through the platform is what keeps every trap in Part 5 in play, and it is where the
+`cmdb_ci` join trap lives, the one that loads zero incident edges while every count in
+between looks right.
+
+`load_neo4j.py` builds the same graph from the local files in a fraction of the time.
+The article teaches that route too, in sections 72 to 74b, and section 66b says to take
+it if you would rather not stand up a ServiceNow instance at all. Both routes end on the
+same corpus and Part 10 scores the same numbers either way. What the file route gives up
+is everything the platform does to your data between the table and the traversal.
 
 ## Licence
 
